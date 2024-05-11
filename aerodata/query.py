@@ -138,6 +138,8 @@ def select_features(all_features: dict, query: AerodromeQueryParams) -> dict:
         "features": features,
     }
     if page_token:
-        feature_collection["metadata"]["next_page_token"] = str(page_token)
+        feature_collection["metadata"] = {
+            "next_page_token": str(page_token)
+        }
 
     return feature_collection
