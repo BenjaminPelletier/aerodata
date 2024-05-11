@@ -1,0 +1,7 @@
+flask
+geomag
+gevent
+gunicorn
+implicitdict
+loguru
+requests
