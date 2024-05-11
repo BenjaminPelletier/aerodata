@@ -10,12 +10,13 @@ import requests
 
 
 raw_data_lock = multiprocessing.RLock()
-full_data_lock = multiprocessing.RLock()
 CACHE_PATH = ".cache"
 MAX_AGE = timedelta(hours=6000)
+RUNWAYS_URL = "https://opendata.arcgis.com/api/v3/datasets/4d8fa46181aa470d809776c57a8ab1f6_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1"
 RUNWAYS_FILENAME = "Runways.geojson"
-FEATURES_FILENAME = "Features.geojson"
+AIRPORTS_URL = "https://opendata.arcgis.com/api/v3/datasets/e747ab91a11045e8b3f8a3efd093d3b5_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1"
 AIRPORTS_FILENAME = "Airports.geosjon"
+FEATURES_FILENAME = "Features.geojson"
 EARTH_CIRCUMFERENCE_FT = 131482560
 RUNWAY_WIDTH_TOLERANCE = 0.2  # fraction
 RUNWAY_HEADING_TOLERANCE = 30  # degrees
@@ -61,44 +62,44 @@ RECIPROCAL_SUFFIXES = {
 }
 
 
-def _heading_of(name: str) -> float:
-    if name in RUNWAY_HEADINGS:
-        return RUNWAY_HEADINGS[name]
-    if name[-1] not in "0123456789":
-        name = name[0:-1]
-    if name in RUNWAY_HEADINGS:
-        return RUNWAY_HEADINGS[name]
-    if len(name) == 2:
-        return float(name) * 10
-    elif len(name) == 3:
-        return float(name)
+def _heading_of(runway_name: str) -> float:
+    if runway_name in RUNWAY_HEADINGS:
+        return RUNWAY_HEADINGS[runway_name]
+    if runway_name[-1] not in "0123456789":
+        runway_name = runway_name[0:-1]
+    if runway_name in RUNWAY_HEADINGS:
+        return RUNWAY_HEADINGS[runway_name]
+    if len(runway_name) == 2:
+        return float(runway_name) * 10
+    elif len(runway_name) == 3:
+        return float(runway_name)
     else:
-        raise ValueError(f"Could not determine heading of runway `{name}`")
+        raise ValueError(f"Could not determine heading of runway `{runway_name}`")
 
 
-def _reciprocal_runway(name: str) -> str:
-    if name in RECIPROCAL_SUFFIXES:
-        return RECIPROCAL_SUFFIXES[name]
-    if name[-1] not in "0123456789":
-        suffix = name[-1]
+def _reciprocal_runway(runway_name: str) -> str:
+    if runway_name in RECIPROCAL_SUFFIXES:
+        return RECIPROCAL_SUFFIXES[runway_name]
+    if runway_name[-1] not in "0123456789":
+        suffix = runway_name[-1]
         if suffix not in RECIPROCAL_SUFFIXES:
-            raise ValueError(f"Cannot determine reciprocal suffix for runway `{name}`")
+            raise ValueError(f"Cannot determine reciprocal suffix for runway `{runway_name}`")
         suffix = RECIPROCAL_SUFFIXES[suffix]
-        name = name[0:-1]
+        runway_name = runway_name[0:-1]
     else:
         suffix = ""
-    if name in RECIPROCAL_SUFFIXES:
-        return RECIPROCAL_SUFFIXES[name] + suffix
-    if len(name) == 2:
-        heading = int(name) * 10
-    elif len(name) == 3:
-        heading = int(name)
+    if runway_name in RECIPROCAL_SUFFIXES:
+        return RECIPROCAL_SUFFIXES[runway_name] + suffix
+    if len(runway_name) == 2:
+        heading = int(runway_name) * 10
+    elif len(runway_name) == 3:
+        heading = int(runway_name)
     else:
-        raise ValueError(f"Could not determine reciprocal runway for `{name}`")
+        raise ValueError(f"Could not determine reciprocal runway for `{runway_name}`")
     heading = (heading + 180) % 360
-    if len(name) == 2:
+    if len(runway_name) == 2:
         return f"{round(heading / 10):02d}{suffix}"
-    elif len(name) == 3:
+    elif len(runway_name) == 3:
         return f"{heading:03d}{suffix}"
     else:
         raise RuntimeError("Impossible logic reached")
@@ -128,15 +129,19 @@ def _unflatten(xy: list[tuple[float, float]], lat0: float, lng0: float) -> list[
     return unflattened
 
 
-def _angular_distance(a1: float, a2: float) -> float:
-    candidates = [a2 - a1, a2 + 360 - a1, a2 - 360 - a1]
+def _angular_distance(a1_deg: float, a2_deg: float) -> float:
+    candidates = [a2_deg - a1_deg, a2_deg + 360 - a1_deg, a2_deg - 360 - a1_deg]
     return min(abs(c) for c in candidates)
 
 
-def get_features():
-    """
+def get_features() -> list[dict]:
+    """Get Features in API format.
 
-    Returns:
+    When necessary, download the source data for runways and airports to cache files.
+
+    When necessary, regenerate features cache file.  Otherwise, read featuers from cache file.
+
+    Returns: List of GeoJSON Features compliant with the API.
 
     Raises:
         * HTTPError for non-successful retrieval status
@@ -151,7 +156,7 @@ def get_features():
         runways_path = os.path.join(CACHE_PATH, RUNWAYS_FILENAME)
         if not os.path.exists(runways_path) or (datetime.utcnow() - datetime.fromtimestamp(os.path.getmtime(runways_path))) > MAX_AGE:
             logger.debug(f"Downloading {RUNWAYS_FILENAME}")
-            resp = requests.get("https://opendata.arcgis.com/api/v3/datasets/4d8fa46181aa470d809776c57a8ab1f6_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
+            resp = requests.get(RUNWAYS_URL)
             resp.raise_for_status()
             runways = resp.json()
             with open(runways_path, "w") as f:
@@ -165,7 +170,7 @@ def get_features():
         airports_path = os.path.join(CACHE_PATH, AIRPORTS_FILENAME)
         if not os.path.exists(airports_path) or (datetime.utcnow() - datetime.fromtimestamp(os.path.getmtime(airports_path))) > MAX_AGE:
             logger.debug(f"Downloading {AIRPORTS_FILENAME}")
-            resp = requests.get("https://opendata.arcgis.com/api/v3/datasets/e747ab91a11045e8b3f8a3efd093d3b5_0/downloads/data?format=geojson&spatialRefId=4326&where=1%3D1")
+            resp = requests.get(AIRPORTS_URL)
             resp.raise_for_status()
             airports = resp.json()
             with open(airports_path, "w") as f:
@@ -177,9 +182,11 @@ def get_features():
                 airports = json.load(f)
 
         if os.path.exists(features_path):
+            # Use cached Features.geojson
             with open(features_path, "r") as f:
                 features = json.load(f)
         else:
+            # Features.geojson isn't present; generate it from airports + runways
             features = []
 
             # Process airports

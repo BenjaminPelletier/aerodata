@@ -6,8 +6,6 @@ from gunicorn.http.wsgi import Response
 from gunicorn.workers.base import Worker
 from loguru import logger
 
-from aerodata import webapp
-
 
 def on_starting(server: Arbiter):
     """gunicorn server hook called just before master process is initialized."""

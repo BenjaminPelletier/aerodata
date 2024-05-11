@@ -72,13 +72,13 @@ class AerodromeQueryParams(object):
 
 
 def select_features(all_features: dict, query: AerodromeQueryParams) -> dict:
-    """
+    """Filter the provided features and return a FeatureCollection with selected features.
 
     Args:
-        all_features:
-        query:
+        all_features: Entire set of features that could be returned.
+        query: Query parameters indicating which features to select.
 
-    Returns:
+    Returns: GeoJSON FeatureCollection compliant with the API.
 
     Raises:
         * ValueError when page_token is invalid
