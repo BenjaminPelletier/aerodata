@@ -1,9 +1,10 @@
 from gevent import monkey
-from requests import HTTPError
 
 monkey.patch_all()
 
 import flask
+from loguru import logger
+from requests import HTTPError
 
 from aerodata.fetch import get_features
 from aerodata.query import AerodromeQueryParams, select_features
@@ -13,6 +14,7 @@ webapp = flask.Flask(__name__)
 
 @webapp.route("/aerodromes")
 def get_aerodromes():
+    logger.debug(f"Staring aerodromes handler for {flask.request.query_string.decode()}")
     try:
         query_params = AerodromeQueryParams.from_dict(flask.request.args)
     except ValueError as e:

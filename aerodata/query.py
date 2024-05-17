@@ -9,6 +9,7 @@ class AerodromeQueryParams(object):
     page_size: int
     exclude_runways: bool
     exclude_helipads: bool
+    exclude_heliports: bool
     exclude_aerodromes: bool
     latA: float
     latB: float
@@ -27,6 +28,7 @@ class AerodromeQueryParams(object):
             raise ValueError("Invalid page_size")
         kwargs["exclude_runways"] = params.get("exclude_runways", "false").lower() == "true"
         kwargs["exclude_helipads"] = params.get("exclude_helipads", "false").lower() == "true"
+        kwargs["exclude_heliports"] = params.get("exclude_heliports", "false").lower() == "true"
         kwargs["exclude_aerodromes"] = params.get("exclude_aerodromes", "false").lower() == "true"
 
         bounding_box = params.get("bounding_box", None)
@@ -71,7 +73,7 @@ class AerodromeQueryParams(object):
         return AerodromeQueryParams(**kwargs)
 
 
-def select_features(all_features: dict, query: AerodromeQueryParams) -> dict:
+def select_features(all_features: list[dict], query: AerodromeQueryParams) -> dict:
     """Filter the provided features and return a FeatureCollection with selected features.
 
     Args:
@@ -118,6 +120,20 @@ def select_features(all_features: dict, query: AerodromeQueryParams) -> dict:
             continue
 
         features.append(feature)
+
+    if query.exclude_heliports:
+        to_remove = []
+        for feature in features:
+            if feature["properties"]["aerodrome_element_type"] == "Aerodrome":
+                surfaces = [
+                    f for f in all_features
+                    if f is not feature
+                       and f["properties"].get("aerodrome_identifier", "") == feature["properties"]["aerodrome_identifier"]
+                ]
+                if all(s["properties"]["aerodrome_element_type"] == "Helipad" for s in surfaces):
+                    to_remove.append(feature)
+        for feature in to_remove:
+            features.remove(feature)
 
     if query.page_token:
         skip = int(query.page_token)
